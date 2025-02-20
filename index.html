@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POJAV Tier List</title>
+  <style>
+    /* Animated gradient background */
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: linear-gradient(45deg, #1a2a6c, #b21f1f, #fdbb2d);
+      background-size: 600% 600%;
+      animation: gradientAnimation 16s ease infinite;
+      color: white;
+      margin: 0;
+      padding: 0;
+    }
+    @keyframes gradientAnimation {
+      0% {background-position: 0% 50%;}
+      50% {background-position: 100% 50%;}
+      100% {background-position: 0% 50%;}
+    }
+    .container { width: 80%; margin: auto; }
+    .menu { 
+      display: flex; 
+      justify-content: center; 
+      gap: 15px; 
+      margin-bottom: 20px; 
+    }
+    .menu button { 
+      padding: 10px 20px; 
+      border: none; 
+      cursor: pointer; 
+      font-weight: bold; 
+      background: #333; 
+      color: white; 
+      border-radius: 5px; 
+      transition: background 0.3s ease;
+    }
+    .menu button:hover { background: #555; }
+    .kit { 
+      display: none; 
+      margin: 20px auto; 
+      padding: 10px; 
+      background: rgba(30, 30, 30, 0.8); 
+      border-radius: 10px; 
+      max-width: 800px;
+    }
+    /* Profile card styling with subtle fade-in */
+    .profile { 
+      border: 1px solid #444; 
+      padding: 10px; 
+      margin: 10px auto; 
+      border-radius: 5px; 
+      max-width: 300px; 
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      animation: fadeIn 1s ease-in-out;
+      background: rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .profile:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    .profile-ign, .profile-tier { margin: 5px 0; }
+    .profile-ign { font-weight: bold; }
+    .profile-tier { font-style: italic; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Tier specific gradient backgrounds for built-in profiles */
+    .ht1 { background: linear-gradient(45deg, #d4af37, #ffd700); }
+    .lt1 { background: linear-gradient(45deg, #ff7f50, #ff6347); }
+    .ht2 { background: linear-gradient(45deg, #c0c0c0, #e0e0e0); }
+    .lt2 { background: linear-gradient(45deg, #90ee90, #32cd32); }
+    .ht3 { background: linear-gradient(45deg, #6a0dad, #bf40bf); }
+    .lt3 { background: linear-gradient(45deg, #6495ED, #87CEFA); }
+    .ht4 { background: linear-gradient(45deg, #8A2BE2, #9370DB); }
+    .lt4 { background: linear-gradient(45deg, #5F9EA0, #66CDAA); }
+    .ht5 { background: linear-gradient(45deg, #808080, #a9a9a9); }
+    .lt5 { background: linear-gradient(45deg, #696969, #808080); }
+    /* Action buttons – hidden by default */
+    .action-buttons {
+      margin-top: 10px;
+      display: none;
+    }
+    /* Show action buttons only in admin mode */
+    body.admin .action-buttons {
+      display: block;
+    }
+    .action-buttons button {
+      padding: 5px 8px;
+      margin: 0 3px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.3s ease;
+    }
+    .action-buttons button.editBtn {
+      background: #007bff;
+      color: white;
+    }
+    .action-buttons button.editBtn:hover {
+      background: #0056b3;
+    }
+    .action-buttons button.deleteBtn {
+      background: #dc3545;
+      color: white;
+    }
+    .action-buttons button.deleteBtn:hover {
+      background: #a71d2a;
+    }
+    /* Global Edit button */
+    #editButton {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #333;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      z-index: 10;
+      transition: background 0.3s ease;
+    }
+    #editButton:hover { background: #555; }
+    /* Modal overlay for Add/Edit form */
+    #editModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+    }
+    #editModalContent {
+      background: #1e1e1e;
+      padding: 20px;
+      border-radius: 10px;
+      width: 300px;
+      text-align: left;
+    }
+    #editModalContent input {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 5px;
+    }
+    #editModalContent button {
+      padding: 10px;
+      width: 100%;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    #editModalContent button:hover {
+      background: #555;
+    }
+    #closeModal {
+      float: right;
+      cursor: pointer;
+      font-size: 18px;
+      color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <!-- Global Edit/Add button -->
+  <button id="editButton">Edit</button>
+  
+  <!-- Modal Form for Add/Edit -->
+  <div id="editModal">
+    <div id="editModalContent">
+      <span id="closeModal">&times;</span>
+      <h3 id="modalTitle">Add New Player</h3>
+      <label for="newIgn">IGN:</label>
+      <input type="text" id="newIgn" placeholder="Enter IGN">
+      <label for="newKit">Kit (axe_shield, uhc, npot, crystal, cart, smp):</label>
+      <input type="text" id="newKit" placeholder="Enter Kit ID">
+      <label for="newTier">Tier (e.g., HT3, HT3+, HT3-):</label>
+      <input type="text" id="newTier" placeholder="Enter Tier">
+      <button id="submitNewPlayer">Submit</button>
+    </div>
+  </div>
+  
+  <h1>POJAV Tier List</h1>
+  <div class="menu">
+    <button onclick="showKit('axe_shield')">Axe & Shield</button>
+    <button onclick="showKit('uhc')">UHC</button>
+    <button onclick="showKit('npot')">NPot</button>
+    <button onclick="showKit('crystal')">Crystal</button>
+    <button onclick="showKit('cart')">Cart</button>
+    <button onclick="showKit('smp')">SMP</button>
+  </div>
+  
+  <!-- Kits with built-in profiles -->
+  <!-- Axe & Shield Kit -->
+  <div id="axe_shield" class="kit">
+    <h2>Axe & Shield Kit</h2>
+    <div class="profile ht3" data-tier="HT3">
+      <div class="profile-ign">IGN: LKhadusGrinder</div>
+      <div class="profile-tier">Tier: HT3</div>
+    </div>
+  </div>
+  
+  <!-- UHC Kit -->
+  <div id="uhc" class="kit">
+    <h2>UHC Kit</h2>
+    <div class="profile lt4" data-tier="LT4">
+      <div class="profile-ign">IGN: Raküza</div>
+      <div class="profile-tier">Tier: LT4</div>
+    </div>
+  </div>
+  
+  <!-- NPot Kit -->
+  <div id="npot" class="kit">
+    <h2>NPot Kit</h2>
+    <!-- Built-in profiles -->
+    <div class="profile lt2" data-tier="LT2">
+      <div class="profile-ign">IGN: Phoenixe</div>
+      <div class="profile-tier">Tier: LT2</div>
+    </div>
+    <div class="profile lt2" data-tier="LT2">
+      <div class="profile-ign">IGN: Jay</div>
+      <div class="profile-tier">Tier: LT2</div>
+    </div>
+    <div class="profile ht3" data-tier="HT3">
+      <div class="profile-ign">IGN: Zex</div>
+      <div class="profile-tier">Tier: HT3</div>
+    </div>
+    <div class="profile ht3" data-tier="HT3">
+      <div class="profile-ign">IGN: Zaqy</div>
+      <div class="profile-tier">Tier: HT3</div>
+    </div>
+    <div class="profile ht3" data-tier="HT3">
+      <div class="profile-ign">IGN: Leeo</div>
+      <div class="profile-tier">Tier: HT3</div>
+    </div>
+    <div class="profile ht3" data-tier="HT3">
+      <div class="profile-ign">IGN: Luciato</div>
+      <div class="profile-tier">Tier: HT3</div>
+    </div>
+    <div class="profile ht4" data-tier="HT4">
+      <div class="profile-ign">IGN: TieRonak</div>
+      <div class="profile-tier">Tier: HT4</div>
+    </div>
+    <div class="profile ht4" data-tier="HT4">
+      <div class="profile-ign">IGN: MENTOR</div>
+      <div class="profile-tier">Tier: HT4</div>
+    </div>
+    <div class="profile ht4" data-tier="HT4">
+      <div class="profile-ign">IGN: LL | Callum3Luis</div>
+      <div class="profile-tier">Tier: HT4</div>
+    </div>
+    <div class="profile ht4" data-tier="HT4">
+      <div class="profile-ign">IGN: Dr4gyn</div>
+      <div class="profile-tier">Tier: HT4</div>
+    </div>
+    <div class="profile ht4" data-tier="HT4">
+      <div class="profile-ign">IGN: Pxility</div>
+      <div class="profile-tier">Tier: HT4</div>
+    </div>
+    <div class="profile lt4" data-tier="LT4">
+      <div class="profile-ign">IGN: Garou</div>
+      <div class="profile-tier">Tier: LT4</div>
+    </div>
+    <div class="profile lt4" data-tier="LT4">
+      <div class="profile-ign">IGN: Shubhayan</div>
+      <div class="profile-tier">Tier: LT4</div>
+    </div>
+    <div class="profile lt4" data-tier="LT4">
+      <div class="profile-ign">IGN: Metr1x</div>
+      <div class="profile-tier">Tier: LT4</div>
+    </div>
+    <div class="profile ht5" data-tier="HT5">
+      <div class="profile-ign">IGN: Parminder_YT</div>
+      <div class="profile-tier">Tier: HT5</div>
+    </div>
+    <!-- Firebase players will load here in realtime -->
+  </div>
+  
+  <!-- Crystal Kit -->
+  <div id="crystal" class="kit">
+    <h2>Crystal Kit</h2>
+    <div class="profile lt3" data-tier="LT3">
+      <div class="profile-ign">IGN: Metrix</div>
+      <div class="profile-tier">Tier: LT3</div>
+    </div>
+    <div class="profile ht5" data-tier="HT5">
+      <div class="profile-ign">IGN: B1no3_OP</div>
+      <div class="profile-tier">Tier: HT5</div>
+    </div>
+    <div class="profile ht5" data-tier="HT5">
+      <div class="profile-ign">IGN: B2 | OBITO</div>
+      <div class="profile-tier">Tier: HT5</div>
+    </div>
+  </div>
+  
+  <!-- Cart Kit -->
+  <div id="cart" class="kit">
+    <h2>Cart Kit</h2>
+    <div class="profile ht3" data-tier="HT3">
+      <div class="profile-ign">IGN: TierThreeOnCC</div>
+      <div class="profile-tier">Tier: HT3</div>
+    </div>
+  </div>
+  
+  <!-- SMP Kit -->
+  <div id="smp" class="kit">
+    <h2>SMP Kit</h2>
+    <div class="profile lt4" data-tier="LT4">
+      <div class="profile-ign">IGN: OWNER | PLXITY</div>
+      <div class="profile-tier">Tier: LT4</div>
+    </div>
+  </div>
+  
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
+    import { getFirestore, collection, onSnapshot, addDoc, setDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyARJWSLUHEte_bTIWLg5mVUMGv2UxUQNTI",
+      authDomain: "plexa-tier-list-official-tl.firebaseapp.com",
+      projectId: "plexa-tier-list-official-tl",
+      storageBucket: "plexa-tier-list-official-tl.firebasestorage.app",
+      messagingSenderId: "490413298530",
+      appId: "1:490413298530:web:181ff60bed17e18595523b",
+      measurementId: "G-1MJKVQGQFZ"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+
+    // Show default kit (NPot)
+    window.showKit = function(kitId) {
+      document.querySelectorAll('.kit').forEach(kit => {
+        kit.style.display = 'none';
+      });
+      document.getElementById(kitId).style.display = 'block';
+    }
+    showKit('npot');
+
+    // Tier order mapping for sorting
+    var tierOrder = {
+      "HT1": 1,
+      "LT1": 2,
+      "HT2": 3,
+      "LT2": 4,
+      "HT3": 5,
+      "LT3": 6,
+      "HT4": 7,
+      "LT4": 8,
+      "HT5": 9,
+      "LT5": 10
+    };
+
+    function sortKit(kitId) {
+      var container = document.getElementById(kitId);
+      var profiles = Array.from(container.getElementsByClassName("profile"));
+      profiles.sort(function(a, b) {
+        var tierA = a.getAttribute("data-tier");
+        var tierB = b.getAttribute("data-tier");
+        return tierOrder[tierA] - tierOrder[tierB];
+      });
+      profiles.forEach(function(profile) {
+        container.appendChild(profile);
+      });
+    }
+
+    // Function to add a player to the DOM with outlines based on tier
+    function addPlayerToDOM(player) {
+      var profile = document.createElement("div");
+      var tierClass = player.tier.toLowerCase();
+      profile.className = "profile " + tierClass;
+      profile.setAttribute("data-id", player.id);
+      profile.setAttribute("data-tier", player.tier.toUpperCase());
+      profile.setAttribute("data-firebase", "true"); // Mark as firebase-added
+      profile.innerHTML = '<div class="profile-ign">IGN: ' + player.ign + '</div>' +
+                          '<div class="profile-tier">Tier: ' + player.tier + '</div>' +
+                          '<div class="action-buttons">' +
+                          '<button class="editBtn">Edit</button>' +
+                          '<button class="deleteBtn">Delete</button>' +
+                          '</div>';
+
+      // Add outline: HT3 or HT3+ gets red; HT3- gets blue.
+      let tierUpper = player.tier.toUpperCase();
+      if (tierUpper === "HT3" || tierUpper === "HT3+") {
+        profile.style.outline = "2px solid red";
+      } else if (tierUpper === "HT3-" || tierUpper === "HT3–") {
+        profile.style.outline = "2px solid blue";
+      }
+
+      var kitContainer = document.getElementById(player.kit);
+      if (!kitContainer) {
+        // Default to NPot kit if kit not found
+        kitContainer = document.getElementById("npot");
+      }
+      kitContainer.appendChild(profile);
+      sortKit(player.kit);
+
+      // Attach Edit/Delete event listeners
+      profile.querySelector(".deleteBtn").addEventListener("click", function() {
+        if (confirm("Are you sure you want to delete this profile?")) {
+          deletePlayer(player.id);
+        }
+      });
+      profile.querySelector(".editBtn").addEventListener("click", function() {
+        editingPlayerId = player.id;
+        document.getElementById("newIgn").value = player.ign;
+        document.getElementById("newKit").value = player.kit;
+        document.getElementById("newTier").value = player.tier;
+        document.getElementById("modalTitle").innerText = "Edit Player";
+        editModal.style.display = "flex";
+      });
+    }
+
+    // Delete a player from Firebase
+    async function deletePlayer(id) {
+      if (confirm("Are you sure you want to delete this profile?")) {
+        try {
+          await deleteDoc(doc(db, "players", id));
+          // The realtime listener will update the UI automatically
+        } catch (e) {
+          console.error("Error deleting document: ", e);
+          alert("Failed to delete player.");
+        }
+      }
+    }
+
+    // Real-time listener for players collection
+    const playersRef = collection(db, "players");
+    const npotContainer = document.getElementById("npot");
+    // Add a loading message until data is received
+    const loadingMessage = document.createElement("p");
+    loadingMessage.textContent = "Loading players...";
+    npotContainer.appendChild(loadingMessage);
+
+    onSnapshot(playersRef, (snapshot) => {
+      loadingMessage.remove();
+      // Remove previously loaded firebase players
+      document.querySelectorAll('.profile[data-firebase="true"]').forEach(el => el.remove());
+      snapshot.forEach((docSnap) => {
+        let player = docSnap.data();
+        player.id = docSnap.id;
+        addPlayerToDOM(player);
+      });
+    });
+
+    // Global variable for editing tracking
+    var editingPlayerId = null;
+
+    // Modal functionality
+    var editButton = document.getElementById("editButton");
+    var editModal = document.getElementById("editModal");
+    var closeModal = document.getElementById("closeModal");
+
+    // Global Edit button click – enable admin mode with special code
+    editButton.addEventListener("click", function() {
+      var code = prompt("Enter special code:");
+      if (code === "yare_yare") {
+        document.body.classList.add("admin");
+        editingPlayerId = null;
+        document.getElementById("modalTitle").innerText = "Add New Player";
+        document.getElementById("newIgn").value = "";
+        document.getElementById("newKit").value = "";
+        document.getElementById("newTier").value = "";
+        editModal.style.display = "flex";
+      } else {
+        alert("Incorrect code!");
+      }
+    });
+
+    closeModal.addEventListener("click", function() {
+      editModal.style.display = "none";
+    });
+
+    // Submit new player or update existing player in Firebase
+    document.getElementById("submitNewPlayer").addEventListener("click", async function() {
+      var ign = document.getElementById("newIgn").value.trim();
+      var kit = document.getElementById("newKit").value.trim();
+      var tier = document.getElementById("newTier").value.trim();
+
+      if (ign === "" || kit === "" || tier === "") {
+        alert("Please fill in all fields.");
+        return;
+      }
+
+      if (editingPlayerId) {
+        // Update existing player in Firebase
+        try {
+          await setDoc(doc(db, "players", editingPlayerId), { ign, kit, tier });
+          alert("Player updated successfully!");
+        } catch (e) {
+          console.error("Error updating document: ", e);
+          alert("Failed to update player.");
+        }
+      } else {
+        // Add new player to Firebase
+        try {
+          await addDoc(collection(db, "players"), { ign, kit, tier });
+          alert("New player added successfully!");
+        } catch (e) {
+          console.error("Error adding document: ", e);
+          alert("Failed to add new player.");
+        }
+      }
+
+      document.getElementById("newIgn").value = "";
+      document.getElementById("newKit").value = "";
+      document.getElementById("newTier").value = "";
+      editModal.style.display = "none";
+    });
+  </script>
+</body>
+</html>
