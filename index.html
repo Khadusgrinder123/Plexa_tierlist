@@ -329,7 +329,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-analytics.js";
-    import { getFirestore, collection, onSnapshot, addDoc, setDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, addDoc, setDoc, deleteDoc, doc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js";
 
     // Firebase configuration
     const firebaseConfig = {
@@ -357,7 +357,7 @@
     showKit('npot');
 
     // Tier order mapping for sorting
-    var tierOrder = {
+    const tierOrder = {
       "HT1": 1,
       "LT1": 2,
       "HT2": 3,
@@ -371,22 +371,22 @@
     };
 
     function sortKit(kitId) {
-      var container = document.getElementById(kitId);
-      var profiles = Array.from(container.getElementsByClassName("profile"));
-      profiles.sort(function(a, b) {
-        var tierA = a.getAttribute("data-tier");
-        var tierB = b.getAttribute("data-tier");
+      const container = document.getElementById(kitId);
+      const profiles = Array.from(container.getElementsByClassName("profile"));
+      profiles.sort((a, b) => {
+        const tierA = a.getAttribute("data-tier");
+        const tierB = b.getAttribute("data-tier");
         return tierOrder[tierA] - tierOrder[tierB];
       });
-      profiles.forEach(function(profile) {
+      profiles.forEach(profile => {
         container.appendChild(profile);
       });
     }
 
     // Function to add a player to the DOM with outlines based on tier
     function addPlayerToDOM(player) {
-      var profile = document.createElement("div");
-      var tierClass = player.tier.toLowerCase();
+      const profile = document.createElement("div");
+      const tierClass = player.tier.toLowerCase();
       profile.className = "profile " + tierClass;
       profile.setAttribute("data-id", player.id);
       profile.setAttribute("data-tier", player.tier.toUpperCase());
@@ -398,17 +398,15 @@
                           '<button class="deleteBtn">Delete</button>' +
                           '</div>';
 
-      // Add outline: HT3 or HT3+ gets red; HT3- gets blue.
-      let tierUpper = player.tier.toUpperCase();
+      const tierUpper = player.tier.toUpperCase();
       if (tierUpper === "HT3" || tierUpper === "HT3+") {
         profile.style.outline = "2px solid red";
       } else if (tierUpper === "HT3-" || tierUpper === "HT3–") {
         profile.style.outline = "2px solid blue";
       }
 
-      var kitContainer = document.getElementById(player.kit);
+      let kitContainer = document.getElementById(player.kit);
       if (!kitContainer) {
-        // Default to NPot kit if kit not found
         kitContainer = document.getElementById("npot");
       }
       kitContainer.appendChild(profile);
@@ -435,7 +433,6 @@
       if (confirm("Are you sure you want to delete this profile?")) {
         try {
           await deleteDoc(doc(db, "players", id));
-          // The realtime listener will update the UI automatically
         } catch (e) {
           console.error("Error deleting document: ", e);
           alert("Failed to delete player.");
@@ -446,14 +443,12 @@
     // Real-time listener for players collection
     const playersRef = collection(db, "players");
     const npotContainer = document.getElementById("npot");
-    // Add a loading message until data is received
     const loadingMessage = document.createElement("p");
     loadingMessage.textContent = "Loading players...";
     npotContainer.appendChild(loadingMessage);
 
     onSnapshot(playersRef, (snapshot) => {
       loadingMessage.remove();
-      // Remove previously loaded firebase players
       document.querySelectorAll('.profile[data-firebase="true"]').forEach(el => el.remove());
       snapshot.forEach((docSnap) => {
         let player = docSnap.data();
@@ -462,18 +457,134 @@
       });
     });
 
-    // Global variable for editing tracking
-    var editingPlayerId = null;
+    let editingPlayerId = null;
+    const editButton = document.getElementById("editButton");
+    const editModal = document.getElementById("editModal");
+    const closeModal = document.getElementById("closeModal");
 
-    // Modal functionality
-    var editButton = document.getElementById("editButton");
-    var editModal = document.getElementById("editModal");
-    var closeModal = document.getElementById("closeModal");
+    // --- Enhanced Admin Security Section ---
+    // Lockout durations in milliseconds
+    const LOCKOUT_NEW = 2 * 60 * 60 * 1000; // 2 hours
+    const LOCKOUT_REPEAT = 60 * 1000; // 1 minute
 
-    // Global Edit button click – enable admin mode with special code
-    editButton.addEventListener("click", function() {
-      var code = prompt("Enter special code:");
-      if (code === "yare_yare") {
+    // A simple (obscuring) hash function for the admin code.
+    function simpleHash(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return hash;
+    }
+    // Store the hash of the admin code ("Plexa!Admin#2025")
+    const ADMIN_HASH = simpleHash("Plexa!Admin#2025");
+
+    // Fetch the public IP address using an external API
+    async function getIP() {
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        return data.ip;
+      } catch (e) {
+        console.error("Error getting IP", e);
+        return "unknown";
+      }
+    }
+
+    // Function to log an edit attempt in Firebase
+    async function logEditAttempt(username, ip, result) {
+      try {
+        await addDoc(collection(db, "editAttempts"), {
+          username,
+          ip,
+          result,
+          timestamp: new Date()
+        });
+      } catch (e) {
+        console.error("Error logging edit attempt:", e);
+      }
+    }
+
+    // Global variables for admin username and unlock state
+    let currentAdminUsername = "";
+    let unlocked = false;
+    let editButtonClickCount = 0;
+    let editButtonClickTimer = null;
+
+    // Handle security failure: show message, log attempt, then redirect and lock edit option for 1 hour.
+    function handleSecurityFailure() {
+      editButton.disabled = true;
+      const lockMessage = document.createElement("button");
+      lockMessage.innerText = "Nice try kiddo";
+      lockMessage.style.position = "fixed";
+      lockMessage.style.top = "50%";
+      lockMessage.style.left = "50%";
+      lockMessage.style.transform = "translate(-50%, -50%)";
+      lockMessage.style.padding = "20px";
+      lockMessage.style.background = "#333";
+      lockMessage.style.color = "#fff";
+      lockMessage.style.borderRadius = "5px";
+      document.body.appendChild(lockMessage);
+      setTimeout(() => {
+        lockMessage.remove();
+        window.location.href = "https://youtu.be/dgKCrWLdiBw?si=ALSKGK8Ol3rxtb68";
+      }, 5000);
+      setTimeout(() => {
+        editButton.disabled = false;
+      }, 3600000); // 1 hour lock
+    }
+
+    // Admin code prompt with username & IP logging, plus unlock-by-tapping feature
+    editButton.addEventListener("click", async function() {
+      // If already unlocked, continue as normal.
+      if (unlocked) return;
+      // Count rapid clicks for unlocking
+      editButtonClickCount++;
+      if (!editButtonClickTimer) {
+        editButtonClickTimer = setTimeout(() => {
+          editButtonClickCount = 0;
+          editButtonClickTimer = null;
+        }, 5000);
+      }
+      if (editButtonClickCount >= 5) {
+        // Unlock menu: prompt for all three passes
+        const pass1 = prompt("Enter admin code:");
+        const pass2 = prompt("Enter name passcode:");
+        const pass3 = prompt("Enter sensitive profile passcode:");
+        if (simpleHash(pass1) === ADMIN_HASH && pass2 === "daddydoit" && pass3 === "yorichi") {
+          alert("Edit unlocked!");
+          unlocked = true;
+          document.body.classList.add("admin");
+          editButtonClickCount = 0;
+          clearTimeout(editButtonClickTimer);
+          editButtonClickTimer = null;
+          // Prepare modal for adding a new player
+          editingPlayerId = null;
+          document.getElementById("modalTitle").innerText = "Add New Player";
+          document.getElementById("newIgn").value = "";
+          document.getElementById("newKit").value = "";
+          document.getElementById("newTier").value = "";
+          editModal.style.display = "flex";
+          return;
+        } else {
+          alert("Incorrect unlock passes!");
+          editButtonClickCount = 0;
+          clearTimeout(editButtonClickTimer);
+          editButtonClickTimer = null;
+          return;
+        }
+      }
+      // Normal admin flow
+      const username = prompt("Enter your username:");
+      if (!username) {
+        alert("Username is required.");
+        return;
+      }
+      currentAdminUsername = username;
+      const ip = await getIP();
+      const code = prompt("Enter admin code:");
+      if (simpleHash(code) === ADMIN_HASH) {
+        await logEditAttempt(username, ip, "success");
         document.body.classList.add("admin");
         editingPlayerId = null;
         document.getElementById("modalTitle").innerText = "Add New Player";
@@ -482,27 +593,93 @@
         document.getElementById("newTier").value = "";
         editModal.style.display = "flex";
       } else {
+        await logEditAttempt(username, ip, "failure");
         alert("Incorrect code!");
+        // Query Firebase for the number of failures for this username+ip
+        const q = query(collection(db, "editAttempts"),
+                        where("username", "==", username),
+                        where("ip", "==", ip),
+                        where("result", "==", "failure"));
+        const querySnapshot = await getDocs(q);
+        const failureCount = querySnapshot.size;
+        
+        if (failureCount === 3) {
+          // Lock for 2 hours and show "Nice try kiddo" for 5 sec, then redirect.
+          editButton.disabled = true;
+          const lockMessage = document.createElement("button");
+          lockMessage.innerText = "Nice try kiddo";
+          lockMessage.style.position = "fixed";
+          lockMessage.style.top = "50%";
+          lockMessage.style.left = "50%";
+          lockMessage.style.transform = "translate(-50%, -50%)";
+          lockMessage.style.padding = "20px";
+          lockMessage.style.background = "#333";
+          lockMessage.style.color = "#fff";
+          lockMessage.style.borderRadius = "5px";
+          document.body.appendChild(lockMessage);
+          setTimeout(() => {
+            lockMessage.remove();
+            window.location.href = "https://youtu.be/dgKCrWLdiBw?si=ALSKGK8Ol3rxtb68";
+          }, 5000);
+          setTimeout(() => {
+            editButton.disabled = false;
+          }, LOCKOUT_NEW);
+        } else if (failureCount > 3) {
+          // Lock for 1 minute and show "Wrong password" for 5 sec.
+          editButton.disabled = true;
+          const lockMessage = document.createElement("button");
+          lockMessage.innerText = "Wrong password";
+          lockMessage.style.position = "fixed";
+          lockMessage.style.top = "50%";
+          lockMessage.style.left = "50%";
+          lockMessage.style.transform = "translate(-50%, -50%)";
+          lockMessage.style.padding = "20px";
+          lockMessage.style.background = "#333";
+          lockMessage.style.color = "#fff";
+          lockMessage.style.borderRadius = "5px";
+          document.body.appendChild(lockMessage);
+          setTimeout(() => {
+            lockMessage.remove();
+          }, 5000);
+          setTimeout(() => {
+            editButton.disabled = false;
+          }, LOCKOUT_REPEAT);
+        }
       }
     });
 
-    closeModal.addEventListener("click", function() {
-      editModal.style.display = "none";
-    });
-
-    // Submit new player or update existing player in Firebase
+    // Submit new player or update existing player in Firebase with extra security checks
     document.getElementById("submitNewPlayer").addEventListener("click", async function() {
-      var ign = document.getElementById("newIgn").value.trim();
-      var kit = document.getElementById("newKit").value.trim();
-      var tier = document.getElementById("newTier").value.trim();
+      const ign = document.getElementById("newIgn").value.trim();
+      const kit = document.getElementById("newKit").value.trim();
+      const tier = document.getElementById("newTier").value.trim();
 
       if (ign === "" || kit === "" || tier === "") {
         alert("Please fill in all fields.");
         return;
       }
 
+      // Additional security: if the admin username is suspicious, require the name passcode.
+      const suspiciousNames = ["jwhwyeiw8w", "hajatekag"];
+      if (suspiciousNames.includes(currentAdminUsername.toLowerCase())) {
+        const namePass = prompt("Enter additional name passcode:");
+        if (namePass !== "daddydoit") {
+          handleSecurityFailure();
+          return;
+        }
+      }
+
+      // Additional security: if the profile’s tier is HT3 (or variant) or the IGN matches the admin username, require a sensitive passcode.
+      if (tier.toUpperCase().startsWith("HT3") || ign.toLowerCase() === currentAdminUsername.toLowerCase()) {
+        const sensitivePass = prompt("Enter sensitive profile passcode:");
+        if (sensitivePass !== "yorichi") {
+          handleSecurityFailure();
+          return;
+        }
+      }
+
+      // Proceed with add/update operation in Firebase
       if (editingPlayerId) {
-        // Update existing player in Firebase
         try {
           await setDoc(doc(db, "players", editingPlayerId), { ign, kit, tier });
           alert("Player updated successfully!");
@@ -511,7 +688,6 @@
           alert("Failed to update player.");
         }
       } else {
-        // Add new player to Firebase
         try {
           await addDoc(collection(db, "players"), { ign, kit, tier });
           alert("New player added successfully!");
@@ -524,6 +700,10 @@
       document.getElementById("newIgn").value = "";
       document.getElementById("newKit").value = "";
       document.getElementById("newTier").value = "";
+      editModal.style.display = "none";
+    });
+
+    closeModal.addEventListener("click", function() {
       editModal.style.display = "none";
     });
   </script>
